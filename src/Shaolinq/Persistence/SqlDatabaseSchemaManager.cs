@@ -1,13 +1,23 @@
 ﻿// Copyright (c) 2007-2016 Thong Nguyen (tumtumtum@gmail.com)
 
 using System;
+using System.Data;
+using System.Linq;
 using System.Linq.Expressions;
-using System.Transactions;
+using Platform.Collections;
 using Shaolinq.Logging;
 using Shaolinq.Persistence.Linq;
 
 namespace Shaolinq.Persistence
 {
+	internal static class DataRowExtensions
+	{
+		public static object GetValue(this DataRow dataRow, int? row)
+		{
+			return row == null ? null : dataRow[row.Value];
+		}
+	}
+	
 	public abstract class SqlDatabaseSchemaManager
 		: IDisposable
 	{
@@ -38,9 +48,43 @@ namespace Shaolinq.Persistence
 		{
 			using (var dataTransactionContext = this.SqlDatabaseContext.CreateSqlTransactionalCommandsContext(null))
 			{
+				var columnsTable = dataTransactionContext
+					.DbConnection
+					.GetSchema("Columns");
+
+				var columnIndexesByName = columnsTable
+					.Columns
+					.Cast<DataColumn>()
+					.ToDictionary(c => c.ColumnName, c => c.Ordinal, StringComparer.InvariantCultureIgnoreCase);
+
+				var columnNameOrdinal = columnIndexesByName.GetValueOrNull("COLUMN_NAME");
+				var tableNameOrdinal = columnIndexesByName.GetValueOrNull("TABLE_NAME");
+				var descriptionOrdinal = columnIndexesByName.GetValueOrNull("DESCRIPTION");
+				var dataTypeOrdinal = columnIndexesByName.GetValueOrNull("DATA_TYPE");
+				var isNullableOrdinal = columnIndexesByName.GetValueOrNull("IS_NULLABLE");
+				var autoIncrementOrdinal = columnIndexesByName.GetValueOrNull("AUTOINCREMENT");
+				var uniqueOrdinal = columnIndexesByName.GetValueOrNull("UNIQUE");
+				var primaryKeyOrdinal = columnIndexesByName.GetValueOrNull("PRIMARY_KEY");
+
+				var columns = columnsTable
+					.Rows
+					.Cast<DataRow>()
+					.Select(c => new
+					{
+						ColumnName = c.GetValue(columnNameOrdinal),
+						TableName = c.GetValue(tableNameOrdinal),
+						Description = c.GetValue(descriptionOrdinal),
+						DataType = c.GetValue(dataTypeOrdinal),
+						IsNullable = c.GetValue(isNullableOrdinal),
+						AutoIncrement = c.GetValue(autoIncrementOrdinal),
+						UniqueOrdinal = c.GetValue(uniqueOrdinal),
+						PrimaryKey = c.GetValue(primaryKeyOrdinal)
+                    })
+					.ToList();
 				
 			}
-				return null;
+
+			return null;
 		}
 
 		protected virtual SqlDataDefinitionBuilderFlags GetBuilderFlags()
