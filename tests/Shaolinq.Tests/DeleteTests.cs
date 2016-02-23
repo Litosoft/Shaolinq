@@ -59,6 +59,11 @@ namespace Shaolinq.Tests
 
 				var count = this.model.Students.Where(c => c.Id != Guid.Empty).Where(c => c.Id != Guid.NewGuid()).Delete(c => c.Id == student2Id);
 
+				this.model.Schools
+					.Update(c => c.Name, () => "Hello")
+					.Update(c => c.Name, () => "Hello")
+					.Update();
+
 				Assert.AreEqual(1, count);
 
 				scope.Complete();

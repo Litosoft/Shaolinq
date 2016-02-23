@@ -174,12 +174,13 @@ namespace Shaolinq.Persistence.Linq
 
 		protected virtual Expression VisitUpdate(SqlUpdateExpression expression)
 		{
+			var source = this.Visit(expression.Source);
 			var newWhere = this.Visit(expression.Where);
 			var newAssignments = this.VisitExpressionList(expression.Assignments);
 
 			if (newWhere != expression.Where || newAssignments != expression.Assignments)
 			{
-				return new SqlUpdateExpression(expression.Table, newAssignments, newWhere);
+				return new SqlUpdateExpression(expression.Source, newAssignments, newWhere);
 			}
 
 			return expression;

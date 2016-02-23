@@ -629,6 +629,28 @@ namespace Shaolinq
             return await ((IQueryProvider)source.Provider).ExecuteExAsync<int>(expression, cancellationToken).ConfigureAwait(false);
         }
 
+        public static Task<IQueryable<T>> UpdateAsync<T, U>(this IQueryable<T> source, Expression<Func<T, U>> propertySelector, Expression<Func<U>> valueSelector)where T : DataAccessObject
+        {
+            return UpdateAsync(source, propertySelector, valueSelector, CancellationToken.None);
+        }
+
+        public static async Task<IQueryable<T>> UpdateAsync<T, U>(this IQueryable<T> source, Expression<Func<T, U>> propertySelector, Expression<Func<U>> valueSelector, CancellationToken cancellationToken)where T : DataAccessObject
+        {
+            Expression expression = Expression.Call(((MethodInfo)MethodBase.GetCurrentMethod()).MakeGenericMethod(typeof (T)), source.Expression, Expression.Quote(propertySelector), Expression.Quote(valueSelector));
+            return ((IQueryProvider)source.Provider).CreateQuery<T>(expression);
+        }
+
+        public static Task<int> UpdateAsync<T>(this IQueryable<T> source)where T : DataAccessObject
+        {
+            return UpdateAsync(source, CancellationToken.None);
+        }
+
+        public static async Task<int> UpdateAsync<T>(this IQueryable<T> source, CancellationToken cancellationToken)where T : DataAccessObject
+        {
+            Expression expression = Expression.Call(((MethodInfo)MethodBase.GetCurrentMethod()).MakeGenericMethod(typeof (T)), source.Expression);
+            return await ((IQueryProvider)source.Provider).ExecuteExAsync<int>(expression, cancellationToken).ConfigureAwait(false);
+        }
+
         public static Task<T> MinAsync<T>(this IQueryable<T> source)
         {
             return MinAsync(source, CancellationToken.None);

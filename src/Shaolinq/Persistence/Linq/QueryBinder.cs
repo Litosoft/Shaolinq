@@ -1014,7 +1014,13 @@ namespace Shaolinq.Persistence.Linq
                         return this.BindDelete(methodCallExpression.Arguments[0]);
                     }
                     break;
-                }
+				case "Update":
+					if (methodCallExpression.Arguments.Count == 2)
+					{
+						return this.BindUpdate(methodCallExpression.Arguments[0]);
+					}
+					break;
+				}
 
 				throw new NotSupportedException($"Linq function \"{methodCallExpression.Method.Name}\" is not supported");
 			}
@@ -1697,6 +1703,25 @@ namespace Shaolinq.Persistence.Linq
 
             return new SqlProjectionExpression(select, new SqlFunctionCallExpression(typeof(int), SqlFunction.RecordsAffected), aggregator, false);
         }
+
+		private Expression BindUpdate(Expression source)
+		{
+			var projection = (SqlProjectionExpression)this.Visit(source);
+
+			var alias = GetNextAlias();
+			var updateExpression = new SqlUpdateExpression(projection, null, null);
+			var select = new SqlSelectExpression(typeof(int), alias, new SqlColumnDeclaration[0], updateExpression, null, null);
+
+			var parameterExpression = Expression.Parameter(typeof(IEnumerable<int>));
+
+			var aggregator = Expression.Lambda
+			(
+				Expression.Call(MethodInfoFastRef.EnumerableExtensionsAlwaysReadFirstMethod.MakeGenericMethod(typeof(int)), parameterExpression),
+				parameterExpression
+			);
+
+			return new SqlProjectionExpression(select, new SqlFunctionCallExpression(typeof(int), SqlFunction.RecordsAffected), aggregator, false);
+		}
 
 		private static string GetExistingAlias(Expression source)
 		{

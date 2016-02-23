@@ -640,14 +640,7 @@ namespace Shaolinq.Persistence.Linq
 		{
 			if (!String.IsNullOrEmpty(columnExpression.SelectAlias))
 			{
-				if (this.ignoreAlias == columnExpression.SelectAlias)
-				{
-					this.WriteQuotedIdentifier(this.replaceAlias);
-				}
-				else
-				{
-					this.WriteQuotedIdentifier(columnExpression.SelectAlias);
-				}
+				this.WriteQuotedIdentifier(columnExpression.SelectAlias);
 
 				this.Write(".");
 			}
@@ -919,8 +912,6 @@ namespace Shaolinq.Persistence.Linq
 			return source;
 		}
 
-		protected string ignoreAlias;
-		protected string replaceAlias;
 		protected readonly string identifierQuoteString;
 		private readonly string stringQuote;
 
@@ -943,12 +934,7 @@ namespace Shaolinq.Persistence.Linq
 			this.Write(" WHERE ");
 			this.WriteLine();
 
-			//this.ignoreAlias = deleteExpression.Alias;
-			//this.replaceAlias = deleteExpression.Table.Name;
-
-		    this.Visit(deleteExpression.Where);
-
-			//this.ignoreAlias = "";
+			this.Visit(deleteExpression.Where);
 
 			return deleteExpression;
 		}
@@ -1296,7 +1282,7 @@ namespace Shaolinq.Persistence.Linq
 		protected override Expression VisitUpdate(SqlUpdateExpression expression)
 		{
 			this.Write("UPDATE ");
-			this.Visit(expression.Table);
+			this.Visit(expression.Source);
 			this.Write(" SET ");
 
 			this.WriteDeliminatedListOfItems(expression.Assignments, c => this.Visit(c));
