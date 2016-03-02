@@ -6,6 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using NUnit.Framework;
 using Platform;
 using Shaolinq.Tests.TestModel;
@@ -1005,7 +1006,6 @@ namespace Shaolinq.Tests
 			}
 		}
 
-
 		[Test]
 		public virtual void Test_Select_FirstOrDefaultAsync()
 		{
@@ -1014,16 +1014,52 @@ namespace Shaolinq.Tests
 			waiter.GetResult();
 		}
 
-		public virtual async Task __Test_Select_FirstOrDefaultAsync()
-		{
-			using (var scope = new DataAccessScope())
-			{
-				var student = await this.model.Students.FirstOrDefaultAsync();
+        public virtual async Task __Test_Select_FirstOrDefaultAsync()
+        {
+            using (var scope = new DataAccessScope())
+            {
+                var student = await this.model.Students.FirstOrDefaultAsync();
 
-				Assert.IsNotNull(student);
-			}
-		}
+                Assert.IsNotNull(student);
+            }
+        }
 
+        [Test]
+        public virtual void Test_Select_FirstOrDefaultAsyncWithPredicate1()
+        {
+            Func<Task> func = async () =>
+            {
+                using (var scope = new DataAccessScope())
+                {
+                    var student = await this.model.Students.FirstOrDefaultAsync(c => c.Firstname == "Tum");
+
+                    Assert.IsNotNull(student);
+                }
+            };
+
+            var waiter = func().ContinueOnAnyContext().GetAwaiter();
+
+            waiter.GetResult();
+        }
+
+        [Test]
+        public virtual void Test_Select_FirstOrDefaultAsyncWithPredicate2()
+        {
+            Func<Task> func = async () =>
+            {
+                using (var scope = new DataAccessScope())
+                {
+                    var student = await this.model.Students.FirstOrDefaultAsync(c => c.Firstname == "aaaaaazzzzTum");
+
+                    Assert.IsNull(student);
+                }
+            };
+
+            var waiter = func().ContinueOnAnyContext().GetAwaiter();
+
+            waiter.GetResult();
+        }
+       
 		[Test]
 		public virtual void Test_ToList()
 		{
@@ -1222,6 +1258,28 @@ namespace Shaolinq.Tests
 					Assert.AreEqual(expected, this.model.Students.Count(c => c.School == school));
 				}
 			}
+		}
+
+		[Test, Ignore]
+		public void Test_Query_Related_Objects3()
+		{
+			Func<Task> func = async () =>
+			{
+				using (var scope = NewTransactionScope())
+				{
+					var studentCountBySchoolId = this.model.Schools.ToList().ToDictionary(c => c.Id, c => c.Students.Count());
+
+					foreach (var school in this.model.Schools.ToList() /* MySql ADO provider doesn't allow nested Count below */)
+					{
+						var expected = studentCountBySchoolId[school.Id];
+
+						Assert.AreEqual(expected, await school.Students.CountAsync());
+						Assert.AreEqual(expected, await this.model.Students.CountAsync(c => c.School == school));
+					}
+				}
+			};
+
+			func().GetAwaiter().GetResult();
 		}
 
 		[Test]
@@ -2604,9 +2662,62 @@ namespace Shaolinq.Tests
 		}
 
 	    [Test]
-	    public void Test_AsyncRead()
+	    public void Test_Bool()
 	    {
-	        
+		    Guid id = Guid.Empty;
+
+		    try
+		    {
+			    using (var scope = NewTransactionScope())
+			    {
+				    var student = this.model.Students.Create();
+
+				    student.School = this.model.Schools.Single(c => c.Name == "Bruce's Kung Fu School");
+
+				    student.Overseas = true;
+
+				    scope.Save();
+
+				    id = student.Id;
+
+				    scope.Complete();
+			    }
+
+			    using (var scope = NewTransactionScope())
+			    {
+				    var student = this.model.Students.SingleOrDefault(c => c.Id == id && c.Overseas);
+
+				    Assert.IsNotNull(student);
+
+				    scope.Complete();
+			    }
+		    }
+		    finally
+		    {
+				using (var scope = NewTransactionScope())
+				{
+					var student = this.model.Students.SingleOrDefault(c => c.Id == id && c.Overseas);
+
+					student.Delete();
+
+					scope.Complete();
+				}
+			}
 	    }
+
+		[Test]
+		public void Test_Rollback_DataAccessScope_Inside_TransactionScope()
+		{
+			using (var scope = new TransactionScope())
+			{
+				using (var scope2 = new TransactionScope())
+				{
+					using (var dataAccessScope = DataAccessScope.CreateReadCommitted())
+					{
+						model.Students.SingleOrDefault(c => c.Id == null);
+					}
+				}
+			}
+		}
 	}
 }

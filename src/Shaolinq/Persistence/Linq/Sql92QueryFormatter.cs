@@ -930,11 +930,13 @@ namespace Shaolinq.Persistence.Linq
 			this.Write("DELETE ");
 			this.Write("FROM ");
 			this.Visit(deleteExpression.Source);
-			this.WriteLine();
-			this.Write(" WHERE ");
-			this.WriteLine();
-
-			this.Visit(deleteExpression.Where);
+			if (deleteExpression.Where != null)
+			{
+				this.WriteLine();
+				this.Write(" WHERE ");
+				this.WriteLine();
+				this.Visit(deleteExpression.Where);
+			}
 
 			return deleteExpression;
 		}
