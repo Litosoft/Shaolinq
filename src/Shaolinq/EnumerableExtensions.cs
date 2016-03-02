@@ -289,14 +289,7 @@ namespace Shaolinq
                 return null;
             }
 
-            var result = enumerable as List<T>;
-
-            if (result != null)
-            {
-                return result;
-            }
-
-            result = new List<T>();
+            var result = new List<T>();
 
             using (var enumerator = enumerable.GetEnumeratorEx())
             {

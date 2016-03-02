@@ -54,9 +54,8 @@ namespace Shaolinq
 
 			return ((IQueryProvider)source.Provider).ExecuteEx<int>(expression);
 		}
-
-		[RewriteAsync]
-		public static IQueryable<T> Update<T, U>(this IQueryable<T> source, Expression<Func<T, U>> propertySelector, Expression<Func<U>> valueSelector)
+		
+		public static IQueryable<T> Set<T, U>(this IQueryable<T> source, Expression<Func<T, U>> propertySelector, Expression<Func<T, U>> valueSelector)
 			where T : DataAccessObject
 		{
 			Expression expression = Expression.Call(((MethodInfo)MethodBase.GetCurrentMethod()).MakeGenericMethod(typeof(T)), source.Expression, Expression.Quote(propertySelector), Expression.Quote(valueSelector));
