@@ -144,6 +144,7 @@
     <Compile Include="GenericModel\ShaolinqIdentityUserStore.cs" />
     <Compile Include="IdentityModelTests.cs" />
     <Compile Include="NonPrimaryAutoIncrement.cs" />
+    <Compile Include="SchemaMigrationTests.cs" />
     <Compile Include="TestModel\Address.cs" />
     <Compile Include="AutoIncrementTests.cs" />
     <Compile Include="TestModel\Bird.cs" />

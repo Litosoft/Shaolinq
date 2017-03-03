@@ -9,12 +9,14 @@ namespace Shaolinq.Persistence
 {
 	public class DefaultSqlDataTypeProvider
 		: SqlDataTypeProvider
-	{
-		private readonly Dictionary<Type, SqlDataType> sqlDataTypesByType;
+	{ 
+		private readonly Dictionary<Type, SqlDataType> sqlDataTypesByType = new Dictionary<Type, SqlDataType>();
+		private readonly Dictionary<string, SqlDataType> sqlDataTypesByName = new Dictionary<string, SqlDataType>(StringComparer.InvariantCultureIgnoreCase);
 
 		protected void DefineSqlDataType(SqlDataType sqlDataType)
 		{
 			this.sqlDataTypesByType[sqlDataType.SupportedType] = sqlDataType;
+			this.sqlDataTypesByName[sqlDataType.GetSqlName(null)] = sqlDataType;
 		}
         
 		protected void DefineSqlDataType(Type type, string name, string getValueMethod)
@@ -32,8 +34,6 @@ namespace Shaolinq.Persistence
 		public DefaultSqlDataTypeProvider(ConstraintDefaultsConfiguration constraintDefaultsConfiguration)
 			: base(constraintDefaultsConfiguration)
 		{
-			this.sqlDataTypesByType = new Dictionary<Type, SqlDataType>();
-
 			this.DefineSqlDataType(typeof(bool), "TINYINT", "GetBoolean");
 			this.DefineSqlDataType(typeof(byte), "BYTE UNSIGNED ", "GetByte");
 			this.DefineSqlDataType(typeof(sbyte), "BYTE", "GetByte");
@@ -86,7 +86,8 @@ namespace Shaolinq.Persistence
 
 				return sqlDataType;
 			}
-			else if (underlyingType.IsArray && underlyingType == typeof(byte[]))
+
+			if (underlyingType.IsArray && underlyingType == typeof(byte[]))
 			{
 				var sqlDataType = this.GetBlobDataType();
 

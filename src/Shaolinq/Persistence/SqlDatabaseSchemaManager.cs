@@ -1,6 +1,7 @@
 ﻿// Copyright (c) 2007-2016 Thong Nguyen (tumtumtum@gmail.com)
 
 using System;
+using System.Data.Common;
 using System.Linq.Expressions;
 using Shaolinq.Logging;
 using Shaolinq.Persistence.Linq;
@@ -35,12 +36,7 @@ namespace Shaolinq.Persistence
 
 		public virtual Expression LoadDataDefinitionExpressions()
 		{
-			using (var dataTransactionContext = this.SqlDatabaseContext.CreateSqlTransactionalCommandsContext(null))
-			{
-				
-			}
-
-			return null;
+			return new ServerSqlDataDefinitionExpressionBuilder(this).Build();
 		}
 
 		protected virtual SqlDataDefinitionBuilderFlags GetBuilderFlags()
