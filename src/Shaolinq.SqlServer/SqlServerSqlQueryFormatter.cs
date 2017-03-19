@@ -12,9 +12,12 @@ namespace Shaolinq.SqlServer
 	public class SqlServerSqlQueryFormatter
 		: Sql92QueryFormatter
 	{
-		public SqlServerSqlQueryFormatter(SqlQueryFormatterOptions options, SqlDialect sqlDialect, SqlDataTypeProvider sqlDataTypeProvider, TypeDescriptorProvider typeDescriptorProvider)
+		private readonly SqlServerSqlDatabaseContextInfo contextInfo;
+
+		public SqlServerSqlQueryFormatter(SqlQueryFormatterOptions options, SqlDialect sqlDialect, SqlDataTypeProvider sqlDataTypeProvider, TypeDescriptorProvider typeDescriptorProvider, SqlServerSqlDatabaseContextInfo contextInfo)
 			: base(options, sqlDialect, sqlDataTypeProvider, typeDescriptorProvider)
 		{
+			this.contextInfo = contextInfo;
 		}
 
 		protected override FunctionResolveResult ResolveSqlFunction(SqlFunctionCallExpression functionCallExpression)
@@ -98,16 +101,6 @@ namespace Shaolinq.SqlServer
 			return base.VisitFunctionCall(functionCallExpression);
 		}
 
-		protected string AddParameter(TypedValue value)
-		{
-			this.Write(this.ParameterIndicatorPrefix);
-			this.Write(ParamNamePrefix);
-			this.Write(this.parameterValues.Count);
-			this.parameterValues.Add(value);
-
-			return $"{this.ParameterIndicatorPrefix}{this.parameterValues.Count}";
-		}
-
 		protected override Expression VisitUnary(UnaryExpression unaryExpression)
 		{
 			switch (unaryExpression.NodeType)
@@ -139,10 +132,20 @@ namespace Shaolinq.SqlServer
 			switch (Type.GetTypeCode(type))
 			{
 			case TypeCode.Boolean:
-				this.Write(this.ParameterIndicatorPrefix);
-				this.Write(ParamNamePrefix);
-				this.Write(this.parameterValues.Count);
-				this.parameterValues.Add(new TypedValue(typeof(int), constantExpression.Value, c => Convert.ToInt32(c)));
+
+				if ((this.options & SqlQueryFormatterOptions.EvaluateConstants) == 0)
+				{
+					var offset = this.CurrentOffset;
+
+					this.Write(this.ParameterIndicatorPrefix);
+					this.Write(ParamNamePrefix);
+					this.Write(this.parameterValues.Count);
+					this.parameterValues.Add(new LocatedTypedValue(new TypedValue(typeof(int), constantExpression.Value, c => Convert.ToInt32(c)), offset, this.CurrentOffset - offset));
+				}
+				else
+				{
+					this.Write(Convert.ToInt32(constantExpression.Value));
+				}
 
 				return constantExpression;
 			}
@@ -157,7 +160,7 @@ namespace Shaolinq.SqlServer
 			expression = SqlServerLimitAmender.Amend(expression);
 			expression = SqlServerBooleanNormalizer.Normalize(expression);
 			expression = SqlServerDateTimeFunctionsAmender.Amend(expression);
-			expression = SqlServerUniqueNullIndexAnsiComplianceFixer.Fix(expression);
+			expression = SqlServerUniqueNullIndexAnsiComplianceFixer.Fix(expression, this.contextInfo.UniqueNullIndexAnsiComplianceFixerClassicBehaviour);
 			
 			return base.PreProcess(expression);
 		}

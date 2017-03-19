@@ -2,6 +2,7 @@
 
 using System;
 using System.Linq.Expressions;
+using System.Text;
 using System.Text.RegularExpressions;
 using Platform;
 using Shaolinq.Persistence.Linq;
@@ -22,7 +23,6 @@ namespace Shaolinq.Persistence
 			}
 		}
 
-		private volatile Regex formatCommandRegex;
 		private readonly SqlDialect sqlDialect;
 		private readonly string stringQuote; 
 		private readonly string parameterPrefix;
@@ -38,73 +38,77 @@ namespace Shaolinq.Persistence
 			this.parameterPrefix = this.sqlDialect.GetSyntaxSymbolString(SqlSyntaxSymbol.ParameterPrefix);
 		}
 
+		internal virtual string GetConstantValue(object value)
+		{
+			if (value == null || value == DBNull.Value)
+			{
+				return this.sqlDialect.GetSyntaxSymbolString(SqlSyntaxSymbol.Null);
+			}
+			
+			var type = value.GetType();
+
+			type = Nullable.GetUnderlyingType(type) ?? type;
+
+			if (type == typeof(string) || type.IsEnum)
+			{
+				var str = (string)value;
+
+				if (str.Contains(this.stringQuote))
+				{
+					return this.stringQuote + str.Replace(this.stringQuote, this.stringEscape + this.stringQuote) + this.stringQuote;
+				}
+
+				return this.stringQuote + value + this.stringQuote;
+			}
+
+			if (type == typeof(Guid))
+			{
+				var guidValue = (Guid)value;
+
+				return this.stringQuote + guidValue.ToString("D") + this.stringQuote;
+			}
+
+			if (type == typeof(TimeSpan))
+			{
+				var timespanValue = (TimeSpan)value;
+
+				return this.stringQuote + timespanValue + this.stringQuote;
+			}
+
+			if (type == typeof(DateTime))
+			{
+				var dateTime = ((DateTime)value).ToUniversalTime();
+
+				return this.stringQuote + dateTime.ToString("yyyy-MM-dd HH:mm:ss.fffff") + this.stringQuote;
+			}
+
+			return Convert.ToString(value);
+		}
+
 		public virtual SqlQueryFormatResult Format(Expression expression, SqlQueryFormatterOptions options = SqlQueryFormatterOptions.Default)
 		{
 			return this.CreateQueryFormatter(options).Format(expression);
 		}
 		
-		public virtual string Format(string commandText, Func<string, FormatParamValue> paramNameToValue)
+		public virtual string GetQueryText(SqlQueryFormatResult formatResult, Func<LocatedTypedValue, object> convert = null)
 		{
-			if (this.formatCommandRegex == null)
+			if (!(formatResult.ParameterValues?.Count > 0))
 			{
-				this.formatCommandRegex = new Regex($@"\{this.parameterPrefix}{Sql92QueryFormatter.ParamNamePrefix}[0-9]+", RegexOptions.Compiled);
+				return formatResult.CommandText;
 			}
-			
-			return this.formatCommandRegex.Replace(commandText, match =>
+
+			var index = 0;
+			var stringBuilder = new StringBuilder(formatResult.CommandText.Length * 2);
+
+			foreach (var parameterValue in formatResult.ParameterValues)
 			{
-				var result = paramNameToValue(match.Value);
-				var value = result.Value;
-				var autoQuote = result.AutoQuote;
+				stringBuilder.Append(formatResult.CommandText, index, parameterValue.Offset - index);
+				stringBuilder.Append(convert?.Invoke(parameterValue) ?? GetConstantValue(parameterValue.TypedValue.Value));
 
-				if (value == null || value == DBNull.Value)
-				{
-					return this.sqlDialect.GetSyntaxSymbolString(SqlSyntaxSymbol.Null);
-				}
+				index += parameterValue.Length;
+			}
 
-				if (!autoQuote)
-				{
-					return Convert.ToString(value);
-				}
-
-				var type = value.GetType();
-
-				type = Nullable.GetUnderlyingType(type) ?? type;
-
-				if (type == typeof(string) || type.IsEnum)
-				{
-					var str = value.ToString();
-
-					if (str.Contains(this.stringQuote))
-					{
-						return this.stringQuote + str.Replace(this.stringQuote, this.stringEscape + this.stringQuote) + this.stringQuote;
-					}
-
-					return this.stringQuote + str + this.stringQuote;
-				}
-
-				if (type == typeof(Guid))
-				{
-					var guidValue = (Guid)value;
-
-					return this.stringQuote + guidValue.ToString("D") + this.stringQuote;
-				}
-
-				if (type == typeof(TimeSpan))
-				{
-					var timespanValue = (TimeSpan)value;
-
-					return this.stringQuote + timespanValue + this.stringQuote;
-				}
-
-				if (type == typeof(DateTime))
-				{
-					var dateTime = ((DateTime)value).ToUniversalTime();
-
-					return this.stringQuote + dateTime.ToString("yyyy-MM-dd HH:mm:ss.fffff") + this.stringQuote;
-				}
-
-				return Convert.ToString(value);
-			});
+			return stringBuilder.ToString();
 		}
 	}
 }

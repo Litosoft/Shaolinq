@@ -64,7 +64,7 @@ namespace Shaolinq.Persistence.Linq
 
 			return GetQueryText(formatResult);
 		}
-
+			
 		internal FormatParamValue GetParamName(int index)
 		{
 			return new FormatParamValue(paramPrefix + "PARAM" + index, false);

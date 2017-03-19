@@ -700,29 +700,29 @@ namespace Shaolinq.Persistence
 
 	public partial class DefaultSqlTransactionalCommandsContext
 	{
-		public override Task<IDataReader> ExecuteReaderAsync(string sql, IReadOnlyList<TypedValue> parameters)
+		public override Task<IDataReader> ExecuteReaderAsync(SqlQueryFormatResult formatResult)
 		{
-			return ExecuteReaderAsync(sql, parameters, CancellationToken.None);
+			return ExecuteReaderAsync(formatResult, CancellationToken.None);
 		}
 
-		public override async Task<IDataReader> ExecuteReaderAsync(string sql, IReadOnlyList<TypedValue> parameters, CancellationToken cancellationToken)
+		public override async Task<IDataReader> ExecuteReaderAsync(SqlQueryFormatResult formatResult, CancellationToken cancellationToken)
 		{
 			using (var command = this.CreateCommand())
 			{
-				foreach (var value in parameters)
+				foreach (var value in formatResult.ParameterValues)
 				{
-					this.AddParameter(command, value.Type, value.Value);
+					this.AddParameter(command, value.TypedValue.Type, value.TypedValue.Value);
 				}
 
-				command.CommandText = sql;
-				Logger.Info(() => this.FormatCommand(command));
+				command.CommandText = formatResult.CommandText;
+				Logger.Info(() => this.SqlDatabaseContext.SqlQueryFormatterManager.GetQueryText(formatResult));
 				try
 				{
 					return await command.ExecuteReaderExAsync(this.DataAccessModel, cancellationToken).ConfigureAwait(false);
 				}
 				catch (Exception e)
 				{
-					var decoratedException = LogAndDecorateException(e, command);
+					var decoratedException = LogAndDecorateException(e, formatResult);
 					if (decoratedException != null)
 					{
 						throw decoratedException;
@@ -759,7 +759,9 @@ namespace Shaolinq.Persistence
 					continue;
 				}
 
-				using (var command = this.BuildUpdateCommand(typeDescriptor, dataAccessObject))
+				SqlQueryFormatResult formatResult;
+
+				using (var command = this.BuildUpdateCommand(typeDescriptor, dataAccessObject, out formatResult))
 				{
 					if (command == null)
 					{
@@ -767,7 +769,7 @@ namespace Shaolinq.Persistence
 						continue;
 					}
 
-					Logger.Info(() => this.FormatCommand(command));
+					Logger.Info(() => this.FormatCommand(formatResult));
 					int result;
 					try
 					{
@@ -775,7 +777,7 @@ namespace Shaolinq.Persistence
 					}
 					catch (Exception e)
 					{
-						var decoratedException = LogAndDecorateException(e, command);
+						var decoratedException = LogAndDecorateException(e, formatResult);
 						if (decoratedException != null)
 						{
 							throw decoratedException;
@@ -826,11 +828,12 @@ namespace Shaolinq.Persistence
 				var objectReadyToBeCommited = primaryKeyIsComplete && constraintsDeferrableOrNotReferencingNewObject;
 				if (objectReadyToBeCommited)
 				{
+					SqlQueryFormatResult formatResult;
 					var typeDescriptor = this.DataAccessModel.GetTypeDescriptor(type);
-					using (var command = this.BuildInsertCommand(typeDescriptor, dataAccessObject))
+					using (var command = this.BuildInsertCommand(typeDescriptor, dataAccessObject, out formatResult))
 					{
 						retryInsert:
-							Logger.Info(() => this.FormatCommand(command));
+							Logger.Info(() => this.FormatCommand(formatResult));
 						try
 						{
 							var reader = (await command.ExecuteReaderExAsync(this.DataAccessModel, cancellationToken).ConfigureAwait(false));
@@ -863,7 +866,7 @@ namespace Shaolinq.Persistence
 						}
 						catch (Exception e)
 						{
-							var decoratedException = LogAndDecorateException(e, command);
+							var decoratedException = LogAndDecorateException(e, formatResult);
 							if (decoratedException != null)
 							{
 								throw decoratedException;
@@ -898,23 +901,23 @@ namespace Shaolinq.Persistence
 
 		public override async Task DeleteAsync(SqlDeleteExpression deleteExpression, CancellationToken cancellationToken)
 		{
-			var formatResult = this.SqlDatabaseContext.SqlQueryFormatterManager.Format(deleteExpression, SqlQueryFormatterOptions.Default);
+			var formatResult = this.SqlDatabaseContext.SqlQueryFormatterManager.Format(deleteExpression);
 			using (var command = this.CreateCommand())
 			{
 				command.CommandText = formatResult.CommandText;
 				foreach (var value in formatResult.ParameterValues)
 				{
-					this.AddParameter(command, value.Type, value.Value);
+					this.AddParameter(command, value.TypedValue.Type, value.TypedValue.Value);
 				}
 
-				Logger.Info(() => this.FormatCommand(command));
+				Logger.Info(() => this.FormatCommand(formatResult));
 				try
 				{
 					var count = (await command.ExecuteNonQueryExAsync(this.DataAccessModel, cancellationToken).ConfigureAwait(false));
 				}
 				catch (Exception e)
 				{
-					var decoratedException = LogAndDecorateException(e, command);
+					var decoratedException = LogAndDecorateException(e, formatResult);
 					if (decoratedException != null)
 					{
 						throw decoratedException;
@@ -978,7 +981,7 @@ namespace Shaolinq.Persistence.Linq
 			state0:
 				this.state = 1;
 			var commandsContext = (await this.transactionExecutionContextAcquisition.TransactionContext.GetSqlTransactionalCommandsContextAsync(cancellationToken).ConfigureAwait(false));
-			this.dataReader = (await commandsContext.ExecuteReaderAsync(this.objectProjector.formatResult.CommandText, this.objectProjector.formatResult.ParameterValues, cancellationToken).ConfigureAwait(false));
+			this.dataReader = (await commandsContext.ExecuteReaderAsync(this.objectProjector.formatResult, cancellationToken).ConfigureAwait(false));
 			this.context = objectProjector.CreateEnumerationContext(this.dataReader, this.transactionExecutionContextAcquisition.Version);
 			state1:
 				T result;
@@ -1227,8 +1230,10 @@ namespace Shaolinq.Persistence
 	using System.Threading;
 	using System.Threading.Tasks;
 	using System.Collections.Generic;
+	using Platform;
 	using Shaolinq;
 	using Shaolinq.Persistence;
+	using Shaolinq.Persistence.Linq;
 	using Shaolinq.Persistence.Linq.Expressions;
 
 	public abstract partial class SqlTransactionalCommandsContext

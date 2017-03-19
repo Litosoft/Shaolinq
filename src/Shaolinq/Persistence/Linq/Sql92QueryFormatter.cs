@@ -81,6 +81,7 @@ namespace Shaolinq.Persistence.Linq
 			this.typeDescriptorProvider = typeDescriptorProvider;
 			this.sqlDataTypeProvider = sqlDataTypeProvider ?? new DefaultSqlDataTypeProvider(new ConstraintDefaultsConfiguration());
 			this.stringQuote = this.sqlDialect.GetSyntaxSymbolString(SqlSyntaxSymbol.StringQuote);
+			this.stringEscape = this.sqlDialect.GetSyntaxSymbolString(SqlSyntaxSymbol.StringEscape);
 			this.identifierQuoteString = this.sqlDialect.GetSyntaxSymbolString(SqlSyntaxSymbol.IdentifierQuote);
 		}
 
@@ -420,10 +421,12 @@ namespace Shaolinq.Persistence.Linq
 				{
 					for (int i = 0, n = result.argsBefore.Length - 1; i <= n; i++)
 					{
+						var offset = this.CurrentOffset;
+
 						this.Write(this.ParameterIndicatorPrefix);
 						this.Write(ParamNamePrefix);
 						this.Write(this.parameterValues.Count);
-						this.parameterValues.Add(new TypedValue(result.argsBefore[i].Type, result.argsBefore[i].Value));
+						this.parameterValues.Add(new LocatedTypedValue(new TypedValue(result.argsBefore[i].Type, result.argsBefore[i].Value), offset, this.CurrentOffset - offset));
 
 						if (i != n || (functionCallExpression.Arguments.Count > 0))
 						{
@@ -589,16 +592,24 @@ namespace Shaolinq.Persistence.Linq
 		{
 			if (constantExpression.Value == null)
 			{
-				if ((this.options & SqlQueryFormatterOptions.OptimiseOutConstantNulls) != 0)
+				if ((this.options & SqlQueryFormatterOptions.OptimiseOutConstantNulls) != 0 || (this.options & SqlQueryFormatterOptions.EvaluateConstants) != 0)
 				{
 					this.Write(this.sqlDialect.GetSyntaxSymbolString(SqlSyntaxSymbol.Null));
 				}
 				else
 				{
-					this.Write(this.ParameterIndicatorPrefix);
-					this.Write(ParamNamePrefix);
-					this.Write(this.parameterValues.Count);
-					this.parameterValues.Add(new TypedValue(constantExpression.Type, null));
+					if ((this.options & SqlQueryFormatterOptions.EvaluateConstants) != 0)
+					{
+						this.Write(this.formatterManager.GetConstantValue(constantExpression.Value));
+					}
+					else
+					{
+						var offset = this.CurrentOffset;
+						this.Write(this.ParameterIndicatorPrefix);
+						this.Write(ParamNamePrefix);
+						this.Write(this.parameterValues.Count);
+						this.parameterValues.Add(new LocatedTypedValue(new TypedValue(constantExpression.Type, null), offset, this.CurrentOffset - offset));
+					}
 				}
 			}
 			else
@@ -614,10 +625,12 @@ namespace Shaolinq.Persistence.Linq
 				}
 				else
 				{
+					var offset = this.CurrentOffset;
+
 					this.Write(this.ParameterIndicatorPrefix);
 					this.Write(ParamNamePrefix);
 					this.Write(this.parameterValues.Count);
-					this.parameterValues.Add(new TypedValue(constantExpression.Type, constantExpression.Value));
+					this.parameterValues.Add(new LocatedTypedValue(new TypedValue(constantExpression.Type, constantExpression.Value), offset, this.CurrentOffset - offset));
 				}
 			}
 
@@ -1017,6 +1030,7 @@ namespace Shaolinq.Persistence.Linq
 		protected string replaceAlias;
 		protected readonly string identifierQuoteString;
 		private readonly string stringQuote;
+		private string stringEscape;
 
 		protected virtual void WriteTableName(string tableName)
 		{
@@ -1191,7 +1205,7 @@ namespace Shaolinq.Persistence.Linq
 					{
 						this.Write("DEFAULT");
 						this.Write(" ");
-						this.Write(expression.DefaultValue);
+						this.Visit(expression.DefaultValue);
 					}
 					break;
 				case SqlSimpleConstraint.NotNull:

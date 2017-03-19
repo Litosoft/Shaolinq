@@ -51,26 +51,22 @@ namespace Shaolinq.Persistence.Linq
 		}
 
 		private int depth;
-		protected TextWriter writer;
-		protected List<TypedValue> parameterValues;
+		private int charCount;
+		private TextWriter writer;
+		protected List<LocatedTypedValue> parameterValues;
+		protected readonly SqlQueryFormatterManager formatterManager;
 		internal int IndentationWidth { get; }
 		public string ParameterIndicatorPrefix { get; protected set; }
 		protected bool canReuse = true;
 		protected List<Pair<int, int>> parameterIndexToPlaceholderIndexes;
+
+		protected int CurrentOffset => charCount;
 		
 		protected readonly SqlDialect sqlDialect;
 
 		public virtual SqlQueryFormatResult Format(Expression expression)
 		{
-			this.depth = 0;
-			this.canReuse = true;
-			this.writer = new StringWriter(new StringBuilder(1024));
-			this.parameterValues = new List<TypedValue>();
-			this.parameterIndexToPlaceholderIndexes = new List<Pair<int, int>>();
-
-			this.Visit(this.PreProcess(expression));
-
-			return new SqlQueryFormatResult(this, this.writer.ToString(), this.parameterValues, canReuse ? parameterIndexToPlaceholderIndexes : null);
+			return this.Format(expression, new StringWriter(new StringBuilder(1024)));
 		}
 
 		public virtual SqlQueryFormatResult Format(Expression expression, TextWriter writer)
@@ -78,12 +74,12 @@ namespace Shaolinq.Persistence.Linq
 			this.depth = 0;
 			this.canReuse = true;
 			this.writer = writer;
-			this.parameterValues = new List<TypedValue>();
+			this.parameterValues = new List<LocatedTypedValue>();
 			this.parameterIndexToPlaceholderIndexes = new List<Pair<int, int>>();
 
 			this.Visit(this.PreProcess(expression));
 
-			return new SqlQueryFormatResult(this,null, this.parameterValues, canReuse ? parameterIndexToPlaceholderIndexes : null);
+			return new SqlQueryFormatResult(this.writer.ToString(), this.parameterValues, canReuse ? parameterIndexToPlaceholderIndexes : null);
 		}
 
 		protected SqlQueryFormatter(SqlDialect sqlDialect, TextWriter writer)
@@ -108,33 +104,35 @@ namespace Shaolinq.Persistence.Linq
 
 		public virtual void WriteLine()
 		{
-			this.writer.WriteLine();
+			this.writer.Write("\n");
+			charCount++;
 
 			for (var i = 0; i < this.depth * this.IndentationWidth; i++)
 			{
 				this.writer.Write(' ');
+				charCount++;
 			}
 		}
 
-		public virtual void WriteLine(object line)
+		public virtual void WriteLine(object value)
 		{
-			this.writer.Write(line);
-			this.writer.WriteLine();
-
-			for (var i = 0; i < this.depth * this.IndentationWidth; i++)
-			{
-				this.writer.Write(' ');
-			}
+			this.Write(value);
+			this.WriteLine();
 		}
 
 		public virtual void Write(object value)
 		{
-			this.writer.Write(value);
+			var s = value.ToString();
+			this.writer.Write(s);
+			charCount += s.Length;
 		}
 
 		public virtual void WriteFormat(string format, params object[] args)
 		{
-			this.writer.Write(format, args);
+			var s = string.Format(this.writer.FormatProvider, format, args);
+
+			this.writer.Write(s);
+			this.charCount += s.Length;
 		}
 
 		protected virtual Expression PreProcess(Expression expression)

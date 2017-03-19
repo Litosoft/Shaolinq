@@ -15,18 +15,18 @@ namespace Shaolinq.Persistence
 	{
 		#region ExecuteReader
 		[RewriteAsync]
-		public override IDataReader ExecuteReader(string sql, IReadOnlyList<TypedValue> parameters)
+		public override IDataReader ExecuteReader(SqlQueryFormatResult formatResult)
 		{
 			using (var command = this.CreateCommand())
 			{
-				foreach (var value in parameters)
+				foreach (var value in formatResult.ParameterValues)
 				{
-					this.AddParameter(command, value.Type, value.Value);
+					this.AddParameter(command, value.TypedValue.Type, value.TypedValue.Value);
 				}
 
-				command.CommandText = sql;
+				command.CommandText = formatResult.CommandText;
 
-				Logger.Info(() => this.FormatCommand(command));
+				Logger.Info(() => this.SqlDatabaseContext.SqlQueryFormatterManager.GetQueryText(formatResult));
 
 				try
 				{
@@ -144,12 +144,13 @@ namespace Shaolinq.Persistence
 
 				if (objectReadyToBeCommited)
 				{
+					SqlQueryFormatResult formatResult;
 					var typeDescriptor = this.DataAccessModel.GetTypeDescriptor(type);
 
-					using (var command = this.BuildInsertCommand(typeDescriptor, dataAccessObject))
+					using (var command = this.BuildInsertCommand(typeDescriptor, dataAccessObject, out formatResult))
 					{
 retryInsert:
-						Logger.Info(() => this.FormatCommand(command));
+						Logger.Info(() => this.FormatCommand(formatResult));
 
 						try
 						{
@@ -190,7 +191,7 @@ retryInsert:
 						}
 						catch (Exception e)
 						{
-							var decoratedException = LogAndDecorateException(e, command);
+							var decoratedException = LogAndDecorateException(e, formatResult);
 
 							if (decoratedException != null)
 							{
@@ -225,7 +226,7 @@ retryInsert:
 		[RewriteAsync]
 		public override void Delete(SqlDeleteExpression deleteExpression)
 		{
-			var formatResult = this.SqlDatabaseContext.SqlQueryFormatterManager.Format(deleteExpression, SqlQueryFormatterOptions.Default);
+			var formatResult = this.SqlDatabaseContext.SqlQueryFormatterManager.Format(deleteExpression);
 
 			using (var command = this.CreateCommand())
 			{
@@ -233,10 +234,10 @@ retryInsert:
 
 				foreach (var value in formatResult.ParameterValues)
 				{
-					this.AddParameter(command, value.Type, value.Value);
+					this.AddParameter(command, value.TypedValue.Type, value.TypedValue.Value);
 				}
 
-				Logger.Info(() => this.FormatCommand(command));
+				Logger.Info(() => this.FormatCommand(formatResult));
 
 				try
 				{
@@ -244,7 +245,7 @@ retryInsert:
 				}
 				catch (Exception e)
 				{
-					var decoratedException = LogAndDecorateException(e, command);
+					var decoratedException = LogAndDecorateException(e, formatResult);
 
 					if (decoratedException != null)
 					{

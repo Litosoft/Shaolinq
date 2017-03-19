@@ -310,7 +310,6 @@
     <Compile Include="Persistence\SqlQueryFormatterManager.cs" />
     <Compile Include="Persistence\Linq\SqlReferencesColumnDeferrabilityRemover.cs" />
     <Compile Include="Persistence\Linq\SqlDataDefinitionExpressionBuilder.cs" />
-    <Compile Include="Persistence\Linq\SqlMultiColumnPrimaryKeyRemover.cs" />
     <Compile Include="Persistence\SqlCreateCommandOptions.cs" />
     <Compile Include="Persistence\SqlCapability.cs" />
     <Compile Include="Persistence\SqlSyntaxSymbol.cs" />

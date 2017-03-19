@@ -1,28 +1,44 @@
 // Copyright (c) 2007-2016 Thong Nguyen (tumtumtum@gmail.com)
 
 using System.Collections.Generic;
-using System.Linq;
 using Platform;
 
 namespace Shaolinq.Persistence.Linq
 {
+	public struct LocatedTypedValue
+	{
+		public int Offset { get; }
+		public int Length { get; }
+		public TypedValue TypedValue { get; }
+		
+		public LocatedTypedValue(TypedValue typedValue, int offset, int length)
+		{
+			this.TypedValue = typedValue;
+			this.Offset = offset;
+			this.Length = length;
+		}
+
+		public LocatedTypedValue ChangeValue(object value)
+		{
+			return new LocatedTypedValue(this.TypedValue.ChangeValue(value), this.Offset, this.Length);
+		}
+	}
+
 	public class SqlQueryFormatResult
 	{
-		public SqlQueryFormatter Formatter { get; }
 		public string CommandText { get; }
-		public IReadOnlyList<TypedValue> ParameterValues { get; }
-		public Dictionary<int, int> ParameterIndexToPlaceholderIndexes;
+		public IReadOnlyList<LocatedTypedValue> ParameterValues { get; }
+		public Dictionary<int, int> ParameterIndexToPlaceholderIndexes { get; }
 		public bool Cacheable => ParameterIndexToPlaceholderIndexes != null;
-		public Dictionary<int, int> PlaceholderIndexToParameterIndex;
+		public Dictionary<int, int> PlaceholderIndexToParameterIndex {get; }
 		
-		public SqlQueryFormatResult(SqlQueryFormatter formatter, string commandText, IEnumerable<TypedValue> parameterValues, IReadOnlyList<Pair<int, int>> parameterIndexToPlaceholderIndexes)
-			: this(formatter, commandText, parameterValues.ToReadOnlyCollection(), parameterIndexToPlaceholderIndexes)
+		public SqlQueryFormatResult(string commandText, IEnumerable<LocatedTypedValue> parameterValues, IReadOnlyList<Pair<int, int>> parameterIndexToPlaceholderIndexes)
+			: this(commandText, parameterValues.ToReadOnlyCollection(), parameterIndexToPlaceholderIndexes)
 		{
 		}
 
-		public SqlQueryFormatResult(SqlQueryFormatter formatter, string commandText, IReadOnlyList<TypedValue> parameterValues, IReadOnlyList<Pair<int, int>> parameterIndexToPlaceholderIndexes)
+		public SqlQueryFormatResult(string commandText, IReadOnlyList<LocatedTypedValue> parameterValues, IReadOnlyList<Pair<int, int>> parameterIndexToPlaceholderIndexes)
 		{
-			this.Formatter = formatter;
 			this.CommandText = commandText;
 			this.ParameterValues = parameterValues;
 
@@ -39,9 +55,8 @@ namespace Shaolinq.Persistence.Linq
 			}
 		}
 
-		private SqlQueryFormatResult(SqlQueryFormatter formatter, string commandText, IReadOnlyList<TypedValue> parameterValues, Dictionary<int, int> parameterIndexToPlaceholderIndexes, Dictionary<int, int> placeholderIndexToParameterIndexes)
+		private SqlQueryFormatResult(string commandText, IReadOnlyList<LocatedTypedValue> parameterValues, Dictionary<int, int> parameterIndexToPlaceholderIndexes, Dictionary<int, int> placeholderIndexToParameterIndexes)
 		{
-			this.Formatter = formatter;
 			this.CommandText = commandText;
 			this.ParameterValues = parameterValues;
 
@@ -49,14 +64,9 @@ namespace Shaolinq.Persistence.Linq
 			this.PlaceholderIndexToParameterIndex = placeholderIndexToParameterIndexes;
 		}
 
-		public SqlQueryFormatResult ChangeParameterValues(IEnumerable<TypedValue> values)
+		public SqlQueryFormatResult ChangeParameterValues(IEnumerable<LocatedTypedValue> values)
 		{
-			return new SqlQueryFormatResult(this.Formatter, this.CommandText, values.ToReadOnlyCollection(), this.ParameterIndexToPlaceholderIndexes, this.PlaceholderIndexToParameterIndex);
-		}
-
-		public SqlQueryFormatResult ChangeParameterValues(object[] values)
-		{
-			return new SqlQueryFormatResult(this.Formatter, this.CommandText, this.ParameterValues.Select((c, i) => new TypedValue(c.Type, values[i])).ToReadOnlyCollection(), this.ParameterIndexToPlaceholderIndexes, this.PlaceholderIndexToParameterIndex);
+			return new SqlQueryFormatResult(this.CommandText, values.ToReadOnlyCollection(), this.ParameterIndexToPlaceholderIndexes, this.PlaceholderIndexToParameterIndex);
 		}
 	}
 }
